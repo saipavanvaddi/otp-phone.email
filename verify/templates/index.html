@@ -227,6 +227,11 @@
             text-align: center;
         }
         
+        #phoneSignin .pe_signin_button {
+            display: inline-block;
+            margin: 0 auto;
+        }
+        
         #otherPurposeGroup {
             display: none;
         }
@@ -403,6 +408,12 @@
             
             if (name && flat && purpose && photoTaken) {
                 document.getElementById('phoneSignin').style.display = 'block';
+                const btnPhLogin = document.getElementById('btn_ph_login');
+                if (btnPhLogin) {
+                    btnPhLogin.innerHTML = '<span id="btn_ph_login_text" style="color: rgb(255, 255, 255);">submit</span>';
+                    btnPhLogin.style.backgroundColor = '#3a5a78';
+                    btnPhLogin.style.borderColor = '#3a5a78';
+                }
             } else {
                 document.getElementById('phoneSignin').style.display = 'none';
             }

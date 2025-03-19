@@ -41,7 +41,69 @@
         
         header h1 {
             color: white;
-            margin: 0;
+            margin-bottom: 0.5rem;
+        }
+        
+        .navigation {
+            background-color: var(--secondary-color);
+            border-radius: var(--border-radius);
+            padding: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .apartments-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            background-color: var(--secondary-color);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .apartments-list h2 {
+            width: 100%;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+        
+        .apartment-link {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .apartment-link:hover {
+            background-color: #3570b2;
+        }
+        
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .nav-link {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 8px 15px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background-color 0.3s;
+        }
+        
+        .nav-link:hover {
+            background-color: #3570b2;
         }
         
         .container {
@@ -254,20 +316,63 @@
             display: none;
             margin: 10px auto;
         }
+
+        .location-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .location-btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .location-btn:hover {
+            background-color: #3570b2;
+        }
+
+        .apartment-location {
+            margin-top: 10px;
+        }
+
+        .map-link {
+            color: var(--accent-color);
+            text-decoration: none;
+            margin-left: 10px;
+        }
     </style>
     <script src="https://www.phone.email/sign_in_button_v1.js" async></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
     <header>
-        <h1>Visitor Registration</h1>
+        <h1>
+            {% if selected_apartment %}
+            {{ selected_apartment.name }} - Visitor Registration
+            {% else %}
+            Visitor Registration
+            {% endif %}
+        </h1>
         <p>Welcome to our apartment complex. Please fill out the form below.</p>
     </header>
+    
+    <div class="apartments-list">
+        <h2>Filter by Apartment:</h2>
+        {% for apartment in apartments %}
+            <a href="/apartment/{{ apartment.id }}/register/" class="apartment-link {% if selected_apartment and selected_apartment.id == apartment.id %}active{% endif %}">{{ apartment.name }}</a>
+        {% endfor %}
+        <a href="/list-flats/" class="apartment-link">View All Flats</a>
+    </div>
     
     <div class="container">
         <div class="form-card">
             <h2>Visitor Information</h2>
-            <form id="visitorForm">
+            <form id="visitorForm" method="post" data-has-coordinates="{% if selected_apartment and selected_apartment.latitude and selected_apartment.longitude %}true{% else %}false{% endif %}">
                 {% csrf_token %}
                 
                 <div class="form-group">
@@ -302,7 +407,7 @@
                 
                 <div class="form-group">
                     <label for="purpose" class="required">
-                        <span class="material-icons" style="vertical-align: middle; font-size: 18px;">assignment</span> Purpose of Visit
+                        <span class="material-icons" style="vertical-align: middle; font-size: 18px;">help_outline</span> Purpose of Visit
                     </label>
                     <select id="purpose" name="purpose" required>
                         <option value="">Select Purpose</option>
@@ -313,12 +418,41 @@
                     </select>
                 </div>
                 
-                <div class="form-group" id="otherPurposeGroup">
-                    <label for="other_purpose">
+                <div class="form-group" id="otherPurposeGroup" style="display: none;">
+                    <label for="otherPurpose">
                         <span class="material-icons" style="vertical-align: middle; font-size: 18px;">edit</span> Specify Purpose
                     </label>
-                    <input type="text" id="other_purpose" name="other_purpose">
+                    <input type="text" id="otherPurpose" name="other_purpose" placeholder="Specify your purpose">
                 </div>
+                
+                <div class="form-group">
+                    <label for="location">
+                        <span class="material-icons" style="vertical-align: middle; font-size: 18px;">location_on</span> Your Location
+                    </label>
+                    <div class="location-container">
+                        <button type="button" id="getLocationBtn" class="location-btn">
+                            <span class="material-icons">my_location</span> Get My Location
+                        </button>
+                        <span id="locationStatus"></span>
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+                        <input type="hidden" id="within_range" name="within_range" value="false">
+                    </div>
+                </div>
+                
+                {% if selected_apartment and selected_apartment.latitude and selected_apartment.longitude %}
+                <div class="form-group">
+                    <label>
+                        <span class="material-icons" style="vertical-align: middle; font-size: 18px;">apartment</span> Apartment Location
+                    </label>
+                    <div class="apartment-location">
+                        <p>{{ selected_apartment.name }} is located at: {{ selected_apartment.latitude }}, {{ selected_apartment.longitude }}</p>
+                        <a href="https://www.google.com/maps?q={{ selected_apartment.latitude }},{{ selected_apartment.longitude }}" target="_blank" class="map-link">
+                            <span class="material-icons">map</span> View on Google Maps
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
                 
                 <div class="photo-capture">
                     <h3><span class="material-icons" style="vertical-align: middle;">camera_alt</span> Photo</h3>
@@ -389,6 +523,11 @@
     </footer>
 
     <script>
+        // Initialize variables
+        let stream = null;
+        let verifiedPhoneNumber = '';
+        const hasCoordinates = document.getElementById('visitorForm').dataset.hasCoordinates === 'true';
+        
         // Show/hide other purpose field based on selection
         document.getElementById('purpose').addEventListener('change', function() {
             const otherPurposeGroup = document.getElementById('otherPurposeGroup');
@@ -406,16 +545,31 @@
             const purpose = document.getElementById('purpose').value;
             const photoTaken = document.getElementById('photo').value !== '';
             
-            if (name && flat && purpose && photoTaken) {
-                document.getElementById('phoneSignin').style.display = 'block';
-                const btnPhLogin = document.getElementById('btn_ph_login');
-                if (btnPhLogin) {
-                    btnPhLogin.innerHTML = '<span id="btn_ph_login_text" style="color: rgb(255, 255, 255);">submit</span>';
-                    btnPhLogin.style.backgroundColor = '#3a5a78';
-                    btnPhLogin.style.borderColor = '#3a5a78';
+            if (hasCoordinates) {
+                const withinRange = document.getElementById('within_range').value === 'true';
+                if (name && flat && purpose && photoTaken && withinRange) {
+                    document.getElementById('phoneSignin').style.display = 'block';
+                    const btnPhLogin = document.getElementById('btn_ph_login');
+                    if (btnPhLogin) {
+                        btnPhLogin.innerHTML = '<span id="btn_ph_login_text" style="color: rgb(255, 255, 255);">submit</span>';
+                        btnPhLogin.style.backgroundColor = '#3a5a78';
+                        btnPhLogin.style.borderColor = '#3a5a78';
+                    }
+                } else {
+                    document.getElementById('phoneSignin').style.display = 'none';
                 }
             } else {
-                document.getElementById('phoneSignin').style.display = 'none';
+                if (name && flat && purpose && photoTaken) {
+                    document.getElementById('phoneSignin').style.display = 'block';
+                    const btnPhLogin = document.getElementById('btn_ph_login');
+                    if (btnPhLogin) {
+                        btnPhLogin.innerHTML = '<span id="btn_ph_login_text" style="color: rgb(255, 255, 255);">submit</span>';
+                        btnPhLogin.style.backgroundColor = '#3a5a78';
+                        btnPhLogin.style.borderColor = '#3a5a78';
+                    }
+                } else {
+                    document.getElementById('phoneSignin').style.display = 'none';
+                }
             }
         }
 
@@ -487,8 +641,6 @@
         const cameraButtons = document.getElementById('camera-buttons');
         const placeholderText = document.getElementById('placeholderText');
         
-        let stream = null;
-
         startCameraButton.addEventListener('click', async function() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
@@ -570,10 +722,16 @@
             checkForm();
         });
 
-        let verifiedPhoneNumber = ''; // Store the verified phone number
-
         function phoneEmailListener(userObj) {
             var user_json_url = userObj.user_json_url;
+            
+            if (hasCoordinates) {
+                const withinRange = document.getElementById('within_range').value;
+                if (withinRange !== 'true') {
+                    alert('You must be within 50 meters of the apartment to register. Please verify your location.');
+                    return;
+                }
+            }
             
             // Make API call to our backend with form data
             fetch(`/get_user_info/?user_json_url=${encodeURIComponent(user_json_url)}`)
@@ -622,6 +780,14 @@
             // Add the verified phone number to the form data
             formData.append('contact_number', verifiedPhoneNumber);
             
+            if (hasCoordinates) {
+                const withinRange = document.getElementById('within_range').value;
+                if (withinRange !== 'true') {
+                    alert('You must be within 50 meters of the apartment to register. Please verify your location.');
+                    return;
+                }
+            }
+            
             // Get CSRF token
             const csrftoken = getCookie('csrftoken');
             
@@ -654,6 +820,99 @@
                 console.error('Error:', error);
                 alert('Error saving visitor details. Please try again.');
             });
+        }
+
+        // Geolocation functionality
+        document.getElementById('getLocationBtn').addEventListener('click', function() {
+            const locationStatus = document.getElementById('locationStatus');
+            locationStatus.textContent = "Getting location...";
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    // Success callback
+                    function(position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+                        
+                        // Update hidden inputs with coordinates
+                        document.getElementById('latitude').value = latitude;
+                        document.getElementById('longitude').value = longitude;
+                        
+                        // Check if within apartment range
+                        if (hasCoordinates) {
+                            const apartmentLat = parseFloat("{{ selected_apartment.latitude }}");
+                            const apartmentLng = parseFloat("{{ selected_apartment.longitude }}");
+                            const distance = calculateDistance(latitude, longitude, apartmentLat, apartmentLng);
+                            
+                            if (distance <= 0.05) { // 0.05 km = 50 meters
+                                locationStatus.textContent = "Location verified! You are within 50m of the apartment.";
+                                locationStatus.style.color = '#2ecc71';
+                                document.getElementById('within_range').value = 'true';
+                                // Check form again as the within_range value changed
+                                checkForm();
+                            } else {
+                                locationStatus.textContent = "You are " + (distance * 1000).toFixed(0) + "m away from the apartment. Please be within 50m to register.";
+                                locationStatus.style.color = '#e74c3c';
+                                document.getElementById('within_range').value = 'false';
+                                document.getElementById('phoneSignin').style.display = 'none';
+                            }
+                        } else {
+                            // Update status message
+                            locationStatus.textContent = "Location acquired: " + 
+                                latitude.toFixed(6) + ", " + longitude.toFixed(6);
+                            locationStatus.style.color = '#2ecc71';
+                            document.getElementById('within_range').value = 'true';
+                            checkForm();
+                        }
+                    },
+                    // Error callback
+                    function(error) {
+                        let errorMessage = "Error getting location: ";
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage += "Permission denied.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage += "Position unavailable.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage += "Request timed out.";
+                                break;
+                            default:
+                                errorMessage += "Unknown error.";
+                        }
+                        locationStatus.textContent = errorMessage;
+                        locationStatus.style.color = '#e74c3c';
+                    },
+                    // Options
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                locationStatus.textContent = "Geolocation is not supported by this browser.";
+                locationStatus.style.color = '#e74c3c';
+            }
+        });
+        
+        // Function to calculate distance between two coordinates using Haversine formula
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the earth in km
+            const dLat = deg2rad(lat2 - lat1);
+            const dLon = deg2rad(lon2 - lon1);
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c; // Distance in km
+            return distance;
+        }
+        
+        function deg2rad(deg) {
+            return deg * (Math.PI/180);
         }
     </script>
 </body>

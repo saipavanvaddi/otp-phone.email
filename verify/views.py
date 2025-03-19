@@ -1,8 +1,8 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 import requests
 from .user_data import get_user_data
-from .models import  ApartmentVisitor, ApartmentFlat
+from .models import Apartment, ApartmentVisitor, ApartmentFlat
 from .forms import VisitorForm
 from django.contrib import messages
 from otp.supabase_config import supabase, BUCKET_NAME, STORAGE_URL
@@ -10,21 +10,45 @@ import base64
 import uuid
 from io import BytesIO
 from django.utils import timezone
+import math
 
 # Create your views here.
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the distance between two points using the Haversine formula
+    Returns distance in kilometers
+    """
+    # Convert decimal degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [float(lat1), float(lon1), float(lat2), float(lon2)])
+    
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    r = 6371  # Radius of earth in kilometers
+    return c * r
 
 def index(request):
     # Get all flat numbers for the dropdown
     flat_numbers = ApartmentFlat.objects.values_list('flat_number', flat=True)
     
-    # Render the index page with flat numbers
-    response = render(request, 'index.html', {'flat_numbers': flat_numbers})
+    # Get all apartments for the navigation links
+    apartments = Apartment.objects.all()
+    
+    # Render the index page with flat numbers and apartments
+    response = render(request, 'index.html', {
+        'flat_numbers': flat_numbers,
+        'apartments': apartments
+    })
     
     # Set the Cross-Origin-Opener-Policy header for handling popups
     response['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'
     return response
 
 def success(request):
+    """View to display a success message after visitor registration"""
     return render(request, 'success.html')
 
 def get_user_info(request):
@@ -75,6 +99,35 @@ def save_visitor(request):
                     'error': f'Flat number {flat_number} does not exist'
                 })
             
+            # Check if apartment has coordinates and visitor is within range
+            if flat.apartment and flat.apartment.latitude and flat.apartment.longitude:
+                # First check client-side indication
+                within_range = request.POST.get('within_range')
+                
+                # Then do our own server-side validation if coordinates are provided
+                visitor_lat = request.POST.get('latitude')
+                visitor_lng = request.POST.get('longitude')
+                
+                if visitor_lat and visitor_lng and flat.apartment.latitude and flat.apartment.longitude:
+                    # Calculate distance in kilometers
+                    distance = calculate_distance(
+                        visitor_lat, visitor_lng,
+                        flat.apartment.latitude, flat.apartment.longitude
+                    )
+                    # 0.05 km = 50 meters
+                    server_within_range = distance <= 0.05
+                    
+                    if not server_within_range:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Server validation: You must be within 50 meters of the apartment to register. You are {round(distance * 1000, 1)} meters away.'
+                        })
+                elif within_range != 'true':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'You must be within 50 meters of the apartment to register'
+                    })
+                    
             # Handle photo upload to Supabase Storage
             photo_url = None
             photo_data = request.POST.get('photo')
@@ -133,6 +186,10 @@ def save_visitor(request):
                     'error': 'Please specify other purpose'
                 })
             
+            # Get location data if available
+            latitude = request.POST.get('latitude')
+            longitude = request.POST.get('longitude')
+            
             # Create visitor record with verified phone number and photo URL
             try:
                 visitor = ApartmentVisitor.objects.create(
@@ -141,7 +198,9 @@ def save_visitor(request):
                     flat=flat,
                     purpose=purpose,
                     other_purpose=other_purpose if purpose == 'Other' else None,
-                    photo_url=photo_url
+                    photo_url=photo_url,
+                    latitude=latitude if latitude else None,
+                    longitude=longitude if longitude else None
                 )
                 
                 return JsonResponse({
@@ -171,4 +230,45 @@ def save_visitor(request):
 
 def list_flats(request):
     flats = ApartmentFlat.objects.all()
-    return render(request, 'list_flats.html', {'flats': flats})
+    apartments = Apartment.objects.all()
+    return render(request, 'list_flats.html', {
+        'flats': flats,
+        'apartments': apartments
+    })
+
+def apartment_flats(request, apartment_id):
+    # Get the apartment or return 404 if not found
+    apartment = get_object_or_404(Apartment, id=apartment_id)
+    
+    # Get all apartments for the navigation
+    apartments = Apartment.objects.all()
+    
+    # Get all flats for this apartment
+    flats = ApartmentFlat.objects.filter(apartment_id=apartment_id)
+    
+    return render(request, 'apartment_flats.html', {
+        'apartment': apartment,
+        'apartments': apartments,
+        'flats': flats
+    })
+
+def apartment_register(request, apartment_id):
+    # Get the apartment or return 404 if not found
+    apartment = get_object_or_404(Apartment, id=apartment_id)
+    
+    # Get all apartments for the navigation
+    apartments = Apartment.objects.all()
+    
+    # Get flat numbers only for this specific apartment for the dropdown
+    flat_numbers = ApartmentFlat.objects.filter(apartment=apartment).values_list('flat_number', flat=True)
+    
+    # Render the registration page with flat numbers filtered by apartment
+    response = render(request, 'index.html', {
+        'apartments': apartments,
+        'flat_numbers': flat_numbers,
+        'selected_apartment': apartment  # Pass the selected apartment to the template
+    })
+    
+    # Set the Cross-Origin-Opener-Policy header for handling popups
+    response['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'
+    return response

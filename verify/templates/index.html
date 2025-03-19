@@ -306,10 +306,9 @@
                     </label>
                     <select id="purpose" name="purpose" required>
                         <option value="">Select Purpose</option>
-                        <option value="Family/Friend">Family/Friend</option>
+                        <option value="Personal">Personal Visit</option>
                         <option value="Delivery">Delivery</option>
                         <option value="Maintenance">Maintenance</option>
-                        <option value="Service">Service</option>
                         <option value="Other">Other</option>
                     </select>
                 </div>
@@ -341,6 +340,7 @@
                         </button>
                     </div>
                     <input type="hidden" id="photo" name="photo">
+                    <input type="hidden" id="photo_url" name="photo_url">
                 </div>
                 
                 <div id="phoneSignin">
@@ -627,18 +627,8 @@
             
             // Convert data URL to blob for upload
             if (photoInput.value) {
-                const photoDataUrl = photoInput.value;
-                const byteString = atob(photoDataUrl.split(',')[1]);
-                const mimeString = photoDataUrl.split(',')[0].split(':')[1].split(';')[0];
-                const ab = new ArrayBuffer(byteString.length);
-                const ia = new Uint8Array(ab);
-                
-                for (let i = 0; i < byteString.length; i++) {
-                    ia[i] = byteString.charCodeAt(i);
-                }
-                
-                const blob = new Blob([ab], { type: mimeString });
-                formData.set('photo', blob, 'photo.jpg');
+                // Add the photo data directly as base64
+                formData.append('photo', photoInput.value);
             }
             
             fetch('/save_visitor/', {

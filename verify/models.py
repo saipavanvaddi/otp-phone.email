@@ -49,29 +49,20 @@ class ApartmentFlat(models.Model):
 
 class ApartmentVisitor(models.Model):
     PURPOSE_CHOICES = [
-        ('Family/Friend', 'Family/Friend'),
+        ('Personal', 'Personal Visit'),
         ('Delivery', 'Delivery'),
         ('Maintenance', 'Maintenance'),
-        ('Service', 'Service'),
         ('Other', 'Other'),
     ]
 
     name = models.CharField(max_length=100)
-    contact_number = models.CharField(
-        max_length=10,
-        validators=[RegexValidator(r'^\d{10}$', 'Enter a valid 10-digit contact number')]
-    )
-    flat_number = models.CharField(max_length=50)  # Keep the old field temporarily
-    flat = models.ForeignKey('ApartmentFlat', on_delete=models.CASCADE, related_name='visitors', null=True)  # Add null=True temporarily
+    contact_number = models.CharField(max_length=15)
+    flat = models.ForeignKey(ApartmentFlat, on_delete=models.CASCADE)
     purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
     other_purpose = models.CharField(max_length=100, blank=True, null=True)
-    photo = models.ImageField(upload_to='visitor_photos/', blank=True, null=True)
-    visit_date = models.DateField(default=timezone.now)
-    check_in_time = models.DateTimeField(default=timezone.now)
-    check_out_time = models.DateTimeField(blank=True, null=True)
-    is_checked_out = models.BooleanField(default=False)
-    action = models.CharField(max_length=20, default='Pending')
+    photo_url = models.URLField(max_length=500, blank=True, null=True)  # Store Supabase Storage URL
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        flat_display = self.flat.flat_number if self.flat else self.flat_number
-        return f"{self.name} - Visiting {flat_display} on {self.visit_date.strftime('%Y-%m-%d')} at {self.check_in_time.strftime('%H:%M')}"
+        return f"{self.name} - Flat {self.flat.flat_number}"

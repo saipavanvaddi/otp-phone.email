@@ -5,6 +5,11 @@ from .user_data import get_user_data
 from .models import  ApartmentVisitor, ApartmentFlat
 from .forms import VisitorForm
 from django.contrib import messages
+from otp.supabase_config import supabase, BUCKET_NAME, STORAGE_URL
+import base64
+import uuid
+from io import BytesIO
+from django.utils import timezone
 
 # Create your views here.
 
@@ -51,33 +56,112 @@ def get_user_info(request):
 def save_visitor(request):
     if request.method == 'POST':
         try:
+            # Validate required fields
+            required_fields = ['name', 'flat', 'purpose', 'contact_number']
+            for field in required_fields:
+                if not request.POST.get(field):
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'{field.replace("_", " ").title()} is required'
+                    })
+
             # Get the ApartmentFlat instance
             flat_number = request.POST.get('flat')
-            flat = ApartmentFlat.objects.get(flat_number=flat_number)
+            try:
+                flat = ApartmentFlat.objects.get(flat_number=flat_number)
+            except ApartmentFlat.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Flat number {flat_number} does not exist'
+                })
             
-            # Create visitor record with verified phone number
-            visitor = ApartmentVisitor.objects.create(
-                name=request.POST.get('name'),
-                contact_number=request.POST.get('contact_number'),  # This comes from OTP verification
-                flat=flat,  # Pass the ApartmentFlat instance
-                purpose=request.POST.get('purpose'),
-                other_purpose=request.POST.get('other_purpose'),
-                photo=request.FILES.get('photo')
-            )
+            # Handle photo upload to Supabase Storage
+            photo_url = None
+            photo_data = request.POST.get('photo')
             
-            return JsonResponse({
-                'success': True,
-                'message': 'Visitor details saved successfully'
-            })
-        except ApartmentFlat.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid flat number'
-            })
+            if photo_data:
+                try:
+                    # Remove the data URL prefix if present
+                    if photo_data.startswith('data:image'):
+                        photo_data = photo_data.split(',')[1]
+                    
+                    # Decode base64 to bytes
+                    try:
+                        photo_bytes = base64.b64decode(photo_data)
+                    except Exception as e:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid photo data format'
+                        })
+                    
+                    # Generate a unique filename with timestamp
+                    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"{timestamp}_{uuid.uuid4()}.jpg"
+                    
+                    # Upload to Supabase Storage
+                    try:
+                        # Upload file to the bucket
+                        result = supabase.storage.from_(BUCKET_NAME).upload(
+                            path=filename,
+                            file=photo_bytes,
+                            file_options={"content-type": "image/jpeg"}
+                        )
+                        
+                        # Get the public URL using Supabase client
+                        photo_url = supabase.storage.from_(BUCKET_NAME).get_public_url(filename)
+                        
+                    except Exception as e:
+                        print(f"Error uploading to Supabase: {str(e)}")  # Debug log
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Failed to upload photo to storage: {str(e)}'
+                        })
+                        
+                except Exception as e:
+                    print(f"Error processing photo: {str(e)}")  # Debug log
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Error processing photo: {str(e)}'
+                    })
+            
+            # Validate purpose and other_purpose
+            purpose = request.POST.get('purpose')
+            other_purpose = request.POST.get('other_purpose')
+            if purpose == 'Other' and not other_purpose:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Please specify other purpose'
+                })
+            
+            # Create visitor record with verified phone number and photo URL
+            try:
+                visitor = ApartmentVisitor.objects.create(
+                    name=request.POST.get('name'),
+                    contact_number=request.POST.get('contact_number'),
+                    flat=flat,
+                    purpose=purpose,
+                    other_purpose=other_purpose if purpose == 'Other' else None,
+                    photo_url=photo_url
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Visitor details saved successfully',
+                    'visitor_id': visitor.id,
+                    'photo_url': photo_url  # Return the photo URL in the response
+                })
+            except Exception as e:
+                print(f"Error saving visitor: {str(e)}")  # Debug log
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Failed to save visitor record: {str(e)}'
+                })
+                
         except Exception as e:
+            print(f"Unexpected error: {str(e)}")  # Debug log
             return JsonResponse({
                 'success': False,
-                'error': str(e)
+                'error': f'Unexpected error: {str(e)}'
             })
     else:
         return JsonResponse({
